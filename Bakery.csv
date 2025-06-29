@@ -20506,3 +20506,8 @@ TransactionNo,Items,DateTime,Daypart,DayType
 9683,Coffee,2017-09-04 14:57:06,Afternoon,Weekend
 9683,Pastry,2017-09-04 14:57:06,Afternoon,Weekend
 9684,Smoothies,2017-09-04 15:04:24,Afternoon,Weekend
+9685,Bread,2025-06-26 09:30:17,Morning,Weekday
+9685,Bread,2025-06-26 09:30:17,Morning,Weekday
+9686,Scandinavian,2025-06-29 18:07:08,Evening,Weekend
+9686,Scandinavian,2025-06-29 18:07:08,Evening,Weekend
+9686,Bread,2025-06-29 18:07:08,Evening,Weekend

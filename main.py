@@ -2,9 +2,12 @@ import pandas as pd
 from mlxtend.preprocessing import TransactionEncoder
 from mlxtend.frequent_patterns import apriori, association_rules
 import streamlit as st
+import os
+from datetime import datetime
 
-# Load and preprocess the data
-df_bakery = pd.read_csv('Bakery.csv')
+CSV_FILE = "Bakery.csv"
+
+df_bakery = pd.read_csv(CSV_FILE)
 df_bakery['DateTime'] = pd.to_datetime(df_bakery['DateTime'], format="%Y-%m-%d %H:%M:%S")
 df_bakery['Month'] = df_bakery['DateTime'].dt.month
 df_bakery['Day'] = df_bakery['DateTime'].dt.weekday
@@ -25,8 +28,6 @@ df_bakery['Day'].replace(
 df_bakery['Items'] = df_bakery['Items'].astype(str)
 
 st.title("🛒 Market Basket Analysis using Apriori Algorithm")
-
-# --- Helper Functions ---
 
 def get_data(period_day='', weekday_weekend='', month='', day=''):
     data = df_bakery.copy()
@@ -64,7 +65,26 @@ def return_item_df(item_antecedents, association_df):
     else:
         return [item_antecedents, "No recommendation found"]
 
-# --- App Main Logic ---
+def get_daypart(hour):
+    if 5 <= hour < 12:
+        return "Morning"
+    elif 12 <= hour < 17:
+        return "Afternoon"
+    elif 17 <= hour < 21:
+        return "Evening"
+    else:
+        return "Night"
+
+def get_daytype(dt):
+    return "Weekend" if dt.weekday() >= 5 else "Weekday"
+
+def get_new_transaction_no():
+    if os.path.isfile(CSV_FILE):
+        df = pd.read_csv(CSV_FILE)
+        return df["TransactionNo"].max() + 1
+    return 1
+
+
 
 item, period_day, weekday_weekend, month, day = user_input()
 data = get_data(period_day, weekday_weekend, month, day)
@@ -91,3 +111,102 @@ if data is not None:
     st.success(f"If a customer buys **{result[0]}**, they may also buy **{result[1]}**.")
 else:
     st.warning("⚠ No transactions matched your filter. Try different options.")
+
+
+if "new_items" not in st.session_state:
+    st.session_state.new_items = []
+
+if "edit_index" not in st.session_state:
+    st.session_state.edit_index = None
+
+
+# ----- NEW ITEM TRANSACTION ENTRY FORM -----
+
+st.title("📝 New Food Transaction Entry")
+
+if st.session_state.edit_index is None:
+    with st.form(key="add_form"):
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            item_name = st.selectbox('Item', ["Bread", "Scandinavian", "Hot Chocolate", "Jam"])
+        with col2:
+            quantity = st.number_input("Quantity", min_value=1, value=1, step=1)
+
+        add = st.form_submit_button("➕ Add Item")
+        if add:
+            if item_name.strip():
+                st.session_state.new_items.append({
+                    "Item": item_name.strip(),
+                    "Quantity": int(quantity)
+                })
+            else:
+                st.warning("Item name cannot be empty.")
+else:
+    # --- Edit Form ---
+    item_to_edit = st.session_state.new_items[st.session_state.edit_index]
+    with st.form(key="edit_form"):
+        st.info(f"Editing item: {item_to_edit['Item']}")
+        new_item = st.text_input("Food Item Name", value=item_to_edit['Item'])
+        new_quantity = st.number_input("Quantity", min_value=1, value=item_to_edit['Quantity'], step=1)
+        update = st.form_submit_button("💾 Save")
+        cancel = st.form_submit_button("❌ Cancel")
+
+        if update:
+            st.session_state.new_items[st.session_state.edit_index] = {
+                "Item": new_item.strip(),
+                "Quantity": int(new_quantity)
+            }
+            st.session_state.edit_index = None
+            st.success("Item updated.")
+        elif cancel:
+            st.session_state.edit_index = None
+
+if st.session_state.new_items:
+    st.subheader("🧾 Current Items in This Transaction")
+    for i, item in enumerate(st.session_state.new_items):
+        col1, col2, col3 = st.columns([3, 1, 2])
+        col1.write(item["Item"])
+        col2.write(f"x{item['Quantity']}")
+        
+        with col3:
+            col_edit, col_delete = st.columns([1, 1])
+            if col_edit.button("✏️", key=f"edit_{i}"):
+                st.session_state.edit_index = i
+                st.rerun()
+            if col_delete.button("🗑️", key=f"delete_{i}"):
+                st.session_state.new_items.pop(i)
+                st.rerun()
+
+     # --- Submit and Clear Buttons Row ---
+    col_submit, col_clear = st.columns(2)
+    if col_submit.button("✅ Submit Transaction"):
+        now = datetime.now()
+        transaction_no = get_new_transaction_no()
+        date_str = now.strftime("%Y-%m-%d %H:%M:%S")
+        daypart = get_daypart(now.hour)
+        daytype = get_daytype(now)
+
+        rows = []
+        for item in st.session_state.new_items:
+            for _ in range(item["Quantity"]):
+                rows.append({
+                    "TransactionNo": transaction_no,
+                    "Items": item["Item"],
+                    "DateTime": date_str,
+                    "Daypart": daypart,
+                    "DayType": daytype
+                })
+
+        df_new = pd.DataFrame(rows)
+        file_exists = os.path.isfile(CSV_FILE)
+        df_new.to_csv(CSV_FILE, mode="a", index=False, header=not file_exists)
+
+        st.success(f"Transaction {transaction_no} saved with {len(rows)} item(s)")
+        st.session_state.new_items = []
+    if col_clear.button("❌ Clear Table"):
+        st.session_state.new_items = []
+        st.success("All items have been cleared.")
+        st.rerun()
+
+else:
+    st.info("Add at least one item to submit.")

@@ -1,3 +1,4 @@
 pandas
 mlxtend
 streamlit
+os
